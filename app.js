@@ -31,12 +31,12 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBIQa6Ykh6149gWU1PfnBxzKuWF_s6c-mY",
-  authDomain: "vibemodded-index.firebaseapp.com",
-  projectId: "vibemodded-index",
-  storageBucket: "vibemodded-index.firebasestorage.app",
-  messagingSenderId: "182624398225",
-  appId: "1:182624398225:web:4e24a4255938f224408830"
+  apiKey: 'AIzaSyBIQa6Ykh6149gWU1PfnBxzKuWF_s6c-mY',
+  authDomain: 'vibemodded-index.firebaseapp.com',
+  projectId: 'vibemodded-index',
+  storageBucket: 'vibemodded-index.firebasestorage.app',
+  messagingSenderId: '182624398225',
+  appId: '1:182624398225:web:4e24a4255938f224408830',
 };
 
 // Anyone whose UID is in this list gets the Admin tab (Approve, Reject,
@@ -116,6 +116,29 @@ const PLATFORM_LABELS = {
 // State.
 let allMods = []; // every approved mod, fetched once and filtered or sorted in memory
 let developerFilter = null;
+
+// Simple hash based routing, so links like #/developer/ReYeCode or
+// #/tag/Utility work directly, are shareable, and do not need a second
+// HTML file or any server side rewrite rules, since the part after the
+// # never gets sent to GitHub Pages at all.
+function applyHashRoute() {
+  const hash = window.location.hash;
+  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+
+  if (parts[0] === 'developer' && parts[1]) {
+    developerFilter = decodeURIComponent(parts[1]);
+    showView('mods');
+  } else if (parts[0] === 'tag' && parts[1]) {
+    const tagName = decodeURIComponent(parts[1]);
+    const checkbox = tagFiltersEl.querySelector(`.tag-filter-checkbox[value="${CSS.escape(tagName)}"]`);
+    if (checkbox) checkbox.checked = true;
+    showView('mods');
+  }
+}
+window.addEventListener('hashchange', () => {
+  applyHashRoute();
+  renderModsList();
+});
 
 // View switching.
 function showView(view) {
@@ -247,6 +270,7 @@ async function loadMods() {
     const snapshot = await getDocs(modsQuery);
     allMods = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
     buildDynamicFilters();
+    applyHashRoute();
     renderModsList();
   } catch (err) {
     console.error(err);
@@ -321,7 +345,9 @@ function renderModsList() {
   modCount.textContent = mods.length ? `${mods.length} indexed` : '';
 
   if (mods.length === 0) {
-    modsList.innerHTML = '<p class="muted">Nothing matches right now. Try clearing a filter.</p>';
+    modsList.innerHTML = allMods.length === 0
+      ? '<p class="muted">No mods have been approved yet. Once one is approved it will show up here.</p>'
+      : '<p class="muted">Nothing matches your current filters. Try clearing one.</p>';
     return;
   }
 
@@ -336,12 +362,12 @@ function renderModsList() {
       <h3 class="mod-name">${mod.featured ? '<span class="featured-star" title="Featured">*</span>' : ''}${escapeHtml(mod.name)}</h3>
       <p class="mod-desc">${escapeHtml(mod.description || 'No description provided.')}</p>
       <div class="mod-badges">
-        ${(mod.tags || []).map((t) => `<span class="mod-badge">${escapeHtml(t)}</span>`).join('')}
+        ${(mod.tags || []).map((t) => `<button type="button" class="mod-badge" data-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`).join('')}
         ${(mod.platforms || []).map((p) => `<span class="mod-badge">${escapeHtml(platformLabel(p))}</span>`).join('')}
       </div>
       <div class="mod-author">
         <img src="${escapeAttr(mod.authorAvatar)}" alt="">
-        <span>${escapeHtml(mod.developer || mod.authorName)}</span>
+        <button type="button" class="mod-author-link" data-developer="${escapeAttr(mod.developer || mod.authorName)}">${escapeHtml(mod.developer || mod.authorName)}</button>
       </div>
       <div class="mod-downloads">${(mod.downloads || 0).toLocaleString()} downloads</div>
       <div class="mod-links">
@@ -353,9 +379,20 @@ function renderModsList() {
     .join('');
 }
 
-// This just bumps a counter, it does not block the download link from
-// opening normally.
+// Clicking a tag or a developer name updates the URL hash, which is what
+// actually applies the filter, see applyHashRoute below. This makes the
+// filtered view a real shareable link, not just in memory state.
 modsList.addEventListener('click', (e) => {
+  const tagBtn = e.target.closest('[data-tag]');
+  if (tagBtn) {
+    window.location.hash = `#/tag/${encodeURIComponent(tagBtn.dataset.tag)}`;
+    return;
+  }
+  const devBtn = e.target.closest('.mod-author-link');
+  if (devBtn) {
+    window.location.hash = `#/developer/${encodeURIComponent(devBtn.dataset.developer)}`;
+    return;
+  }
   const link = e.target.closest('.download-link');
   if (!link) return;
   const id = link.dataset.modId;
@@ -368,6 +405,7 @@ filterMine.addEventListener('change', renderModsList);
 filterFeatured.addEventListener('change', renderModsList);
 clearFilterBtn.addEventListener('click', () => {
   developerFilter = null;
+  if (window.location.hash) window.location.hash = '';
   renderModsList();
 });
 
@@ -395,9 +433,7 @@ function renderDevelopers() {
 
   developersList.querySelectorAll('.developer-card').forEach((btn) => {
     btn.addEventListener('click', () => {
-      developerFilter = btn.dataset.developer;
-      showView('mods');
-      renderModsList();
+      window.location.hash = `#/developer/${encodeURIComponent(btn.dataset.developer)}`;
     });
   });
 }
