@@ -26,7 +26,6 @@ import {
   getDocs,
   query,
   where,
-  orderBy,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js';
 
@@ -258,15 +257,12 @@ function platformLabel(key) {
 async function loadMods() {
   modsList.innerHTML = '<p class="muted">Loading mods...</p>';
   try {
-    // This needs a composite index, status ascending and createdAt
-    // descending. If it is missing or still building, this query will
-    // throw and you will land in the catch block below. Check the
-    // Firestore Indexes tab in the Firebase console if that happens.
-    const modsQuery = query(
-      collection(db, 'mods'),
-      where('status', '==', 'approved'),
-      orderBy('createdAt', 'desc')
-    );
+    // Just a plain equality filter on purpose, no orderBy here. Firestore
+    // keeps automatic indexes for single field filters like this one, so
+    // this works with zero setup. Sorting happens client side instead,
+    // in renderModsList below, which we needed to do anyway to support
+    // the Most downloaded and Name sort options.
+    const modsQuery = query(collection(db, 'mods'), where('status', '==', 'approved'));
     const snapshot = await getDocs(modsQuery);
     allMods = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
     buildDynamicFilters();
