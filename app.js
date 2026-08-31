@@ -64,6 +64,12 @@ const navSettings = document.getElementById('nav-settings');
 const navProfile = document.getElementById('nav-profile');
 const viewMods = document.getElementById('view-mods');
 const viewDevelopers = document.getElementById('view-developers');
+const viewDeveloperProfile = document.getElementById('view-developer-profile');
+const viewModDetail = document.getElementById('view-mod-detail');
+const developerProfileContent = document.getElementById('developer-profile-content');
+const modDetailContent = document.getElementById('mod-detail-content');
+const devProfileBackBtn = document.getElementById('dev-profile-back');
+const modDetailBackBtn = document.getElementById('mod-detail-back');
 const viewProfile = document.getElementById('view-profile');
 const viewAdmin = document.getElementById('view-admin');
 const viewSettings = document.getElementById('view-settings');
@@ -114,24 +120,42 @@ const PLATFORM_LABELS = {
 
 // State.
 let allMods = []; // every approved mod, fetched once and filtered or sorted in memory
-let developerFilter = null;
 
-// Simple hash based routing, so links like #/developer/ReYeCode or
-// #/tag/Utility work directly, are shareable, and do not need a second
-// HTML file or any server side rewrite rules, since the part after the
-// # never gets sent to GitHub Pages at all.
+// Turns any string into a plain lowercase, dash separated slug. Used as a
+// fallback link for a mod when it has no modId from mod.json, which
+// should be rare since Geode requires that field, but better safe.
+function slugify(s) {
+  return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+function modRouteKey(mod) {
+  return mod.modId || `${slugify(mod.developer || mod.authorName)}.${slugify(mod.name)}`;
+}
+
+// Simple hash based routing, so links like #/developer/ReYeCode,
+// #/tag/Utility, or #/mod/geode.node-ids work directly, are shareable,
+// and do not need a second HTML file or any server side rewrite rules,
+// since the part after the # never gets sent to GitHub Pages at all.
 function applyHashRoute() {
   const hash = window.location.hash;
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
 
   if (parts[0] === 'developer' && parts[1]) {
-    developerFilter = decodeURIComponent(parts[1]);
-    showView('mods');
+    renderDeveloperProfile(decodeURIComponent(parts[1]));
+    showView('developer-profile');
   } else if (parts[0] === 'tag' && parts[1]) {
     const tagName = decodeURIComponent(parts[1]);
     const checkbox = tagFiltersEl.querySelector(`.tag-filter-checkbox[value="${CSS.escape(tagName)}"]`);
     if (checkbox) checkbox.checked = true;
     showView('mods');
+  } else if (parts[0] === 'mod' && parts[1]) {
+    const key = decodeURIComponent(parts[1]);
+    const mod = allMods.find((m) => modRouteKey(m) === key);
+    if (mod) {
+      renderModDetail(mod);
+      showView('mod-detail');
+    } else {
+      showView('mods');
+    }
   }
 }
 window.addEventListener('hashchange', () => {
@@ -143,6 +167,8 @@ window.addEventListener('hashchange', () => {
 function showView(view) {
   viewMods.classList.toggle('hidden', view !== 'mods');
   viewDevelopers.classList.toggle('hidden', view !== 'developers');
+  viewDeveloperProfile.classList.toggle('hidden', view !== 'developer-profile');
+  viewModDetail.classList.toggle('hidden', view !== 'mod-detail');
   viewProfile.classList.toggle('hidden', view !== 'profile');
   viewAdmin.classList.toggle('hidden', view !== 'admin');
   viewSettings.classList.toggle('hidden', view !== 'settings');
@@ -150,7 +176,14 @@ function showView(view) {
   navDevelopers.classList.toggle('active', view === 'developers');
   navSettings.classList.toggle('active', view === 'settings');
 }
-navMods.addEventListener('click', () => showView('mods'));
+function backToMods() {
+  if (window.location.hash) window.location.hash = '';
+  showView('mods');
+}
+devProfileBackBtn.addEventListener('click', backToMods);
+modDetailBackBtn.addEventListener('click', backToMods);
+
+navMods.addEventListener('click', backToMods);
 navDevelopers.addEventListener('click', () => {
   showView('developers');
   renderDevelopers();
@@ -311,8 +344,9 @@ function renderModsList() {
   const onlyFeatured = filterFeatured.checked;
   const user = auth.currentUser;
 
-  if (developerFilter) {
-    activeFilterText.textContent = `Showing mods by ${developerFilter}`;
+  const hasActiveFilters = !!term || selectedTags.length > 0 || selectedPlatforms.length > 0 || onlyMine || onlyFeatured;
+  if (hasActiveFilters) {
+    activeFilterText.textContent = 'Filters are active';
     activeFilterBanner.classList.remove('hidden');
   } else {
     activeFilterBanner.classList.add('hidden');
@@ -323,7 +357,6 @@ function renderModsList() {
       const haystack = `${m.name} ${m.description} ${m.developer}`.toLowerCase();
       if (!haystack.includes(term)) return false;
     }
-    if (developerFilter && m.developer !== developerFilter) return false;
     if (selectedTags.length && !selectedTags.some((t) => (m.tags || []).includes(t))) return false;
     if (selectedPlatforms.length && !selectedPlatforms.some((p) => (m.platforms || []).includes(p))) return false;
     if (onlyMine && (!user || m.authorId !== user.uid)) return false;
@@ -355,7 +388,11 @@ function renderModsList() {
         <span class="mod-index">No. ${String(mods.length - i).padStart(3, '0')}</span>
         ${mod.version ? `<span class="mod-version">v${escapeHtml(mod.version)}</span>` : ''}
       </div>
-      <h3 class="mod-name">${mod.featured ? '<span class="featured-star" title="Featured">*</span>' : ''}${escapeHtml(mod.name)}</h3>
+      <h3 class="mod-name">
+        <button type="button" class="mod-name-link" data-mod-route="${escapeAttr(modRouteKey(mod))}">
+          ${mod.featured ? '<span class="featured-star" title="Featured">*</span>' : ''}${escapeHtml(mod.name)}
+        </button>
+      </h3>
       <p class="mod-desc">${escapeHtml(mod.description || 'No description provided.')}</p>
       <div class="mod-badges">
         ${(mod.tags || []).map((t) => `<button type="button" class="mod-badge" data-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`).join('')}
@@ -375,20 +412,32 @@ function renderModsList() {
     .join('');
 }
 
-// Clicking a tag or a developer name updates the URL hash, which is what
-// actually applies the filter, see applyHashRoute below. This makes the
-// filtered view a real shareable link, not just in memory state.
-modsList.addEventListener('click', (e) => {
+// Clicking a tag, a developer name, or a mod name updates the URL hash,
+// which is what actually applies the filter or opens the page, see
+// applyHashRoute above. This makes every one of these a real shareable
+// link, not just in memory state. Shared so the developer profile page's
+// "Top mods" list can reuse the exact same behavior.
+function handleModRowClick(e) {
+  const modBtn = e.target.closest('[data-mod-route]');
+  if (modBtn) {
+    window.location.hash = `#/mod/${encodeURIComponent(modBtn.dataset.modRoute)}`;
+    return true;
+  }
   const tagBtn = e.target.closest('[data-tag]');
   if (tagBtn) {
     window.location.hash = `#/tag/${encodeURIComponent(tagBtn.dataset.tag)}`;
-    return;
+    return true;
   }
   const devBtn = e.target.closest('.mod-author-link');
   if (devBtn) {
     window.location.hash = `#/developer/${encodeURIComponent(devBtn.dataset.developer)}`;
-    return;
+    return true;
   }
+  return false;
+}
+
+modsList.addEventListener('click', (e) => {
+  if (handleModRowClick(e)) return;
   const link = e.target.closest('.download-link');
   if (!link) return;
   const id = link.dataset.modId;
@@ -400,8 +449,11 @@ sortSelect.addEventListener('change', renderModsList);
 filterMine.addEventListener('change', renderModsList);
 filterFeatured.addEventListener('change', renderModsList);
 clearFilterBtn.addEventListener('click', () => {
-  developerFilter = null;
-  if (window.location.hash) window.location.hash = '';
+  searchInput.value = '';
+  filterMine.checked = false;
+  filterFeatured.checked = false;
+  tagFiltersEl.querySelectorAll('.tag-filter-checkbox').forEach((cb) => (cb.checked = false));
+  platformFiltersEl.querySelectorAll('.platform-filter-checkbox').forEach((cb) => (cb.checked = false));
   renderModsList();
 });
 
@@ -433,6 +485,81 @@ function renderDevelopers() {
     });
   });
 }
+
+// A single clickable row used in the "Top mods" list on a developer's
+// profile page, styled differently from the grid cards on the main
+// Mods page since it reads better as a compact list here.
+function modRowHtml(mod) {
+  return `
+    <button type="button" class="mod-row" data-mod-route="${escapeAttr(modRouteKey(mod))}">
+      <span class="mod-row-icon">${escapeHtml((mod.name || '?').trim().charAt(0).toUpperCase())}</span>
+      <span class="mod-row-main">
+        <span class="mod-row-name">${escapeHtml(mod.name)} ${mod.version ? `<span class="mod-version">v${escapeHtml(mod.version)}</span>` : ''}</span>
+        <span class="mod-row-desc">${escapeHtml(mod.description || 'No description provided.')}</span>
+      </span>
+      <span class="mod-row-downloads">${(mod.downloads || 0).toLocaleString()} downloads</span>
+    </button>`;
+}
+
+// A whole developer profile page: avatar, mod count, a link to their
+// GitHub, and every approved mod they have. This is what #/developer/x
+// actually renders now, it used to just filter the main grid.
+function renderDeveloperProfile(name) {
+  const mods = allMods.filter((m) => (m.developer || m.authorName) === name);
+  const avatar = mods[0]?.authorAvatar || '';
+
+  developerProfileContent.innerHTML = `
+    <div class="profile-header">
+      <img class="profile-header-avatar" src="${escapeAttr(avatar)}" alt="">
+      <div class="profile-header-info">
+        <h2>${escapeHtml(name)}</h2>
+        <p class="muted">${mods.length} mod${mods.length === 1 ? '' : 's'}</p>
+      </div>
+      <a class="btn btn-ghost" href="https://github.com/${encodeURIComponent(name)}" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <h3>Top mods</h3>
+    <div class="mod-row-list">
+      ${mods.length ? mods.map(modRowHtml).join('') : '<p class="muted">No approved mods yet.</p>'}
+    </div>
+  `;
+}
+developerProfileContent.addEventListener('click', handleModRowClick);
+
+// A full mod detail page, this is what #/mod/{id} renders. {id} is the
+// modId from mod.json when there is one, which Geode requires, so this
+// should cover every real submission.
+function renderModDetail(mod) {
+  modDetailContent.innerHTML = `
+    <div class="mod-detail-header">
+      <div class="mod-detail-icon">${escapeHtml((mod.name || '?').trim().charAt(0).toUpperCase())}</div>
+      <div>
+        <h2>${mod.featured ? '<span class="featured-star" title="Featured">*</span>' : ''}${escapeHtml(mod.name)}</h2>
+        <button type="button" class="mod-author-link" data-developer="${escapeAttr(mod.developer || mod.authorName)}">${escapeHtml(mod.developer || mod.authorName)}</button>
+      </div>
+    </div>
+    <div class="mod-detail-body">
+      <div class="panel mod-detail-main">
+        <p>${escapeHtml(mod.description || 'No description provided.')}</p>
+        ${(mod.tags || []).length ? `<div class="mod-badges">${mod.tags.map((t) => `<button type="button" class="mod-badge" data-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`).join('')}</div>` : ''}
+      </div>
+      <div class="mod-detail-side panel">
+        ${mod.version ? `<div class="stat-row"><span class="muted">Version</span><span>${escapeHtml(mod.version)}</span></div>` : ''}
+        <div class="stat-row"><span class="muted">Downloads</span><span>${(mod.downloads || 0).toLocaleString()}</span></div>
+        ${(mod.platforms || []).length ? `<div class="stat-row"><span class="muted">Platforms</span><span>${mod.platforms.map((p) => escapeHtml(platformLabel(p))).join(', ')}</span></div>` : ''}
+        ${mod.modId ? `<div class="stat-row"><span class="muted">ID</span><span class="mono-text">${escapeHtml(mod.modId)}</span></div>` : ''}
+        <a class="btn btn-primary mod-detail-download" data-mod-id="${mod.id}" href="${escapeAttr(mod.downloadUrl)}" target="_blank" rel="noopener">Download</a>
+        ${mod.repoUrl ? `<a class="btn btn-ghost" href="${escapeAttr(mod.repoUrl)}" target="_blank" rel="noopener">Source code</a>` : ''}
+      </div>
+    </div>
+  `;
+  const downloadBtn = modDetailContent.querySelector('.mod-detail-download');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      updateDoc(doc(db, 'mods', downloadBtn.dataset.modId), { downloads: increment(1) }).catch((err) => console.error(err));
+    });
+  }
+}
+modDetailContent.addEventListener('click', handleModRowClick);
 
 // Your mods, shown on the profile page.
 async function loadMyMods() {
