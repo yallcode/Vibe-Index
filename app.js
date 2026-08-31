@@ -41,9 +41,9 @@ const firebaseConfig = {
 // Anyone whose UID is in this list gets the Admin tab (Approve, Reject,
 // Delete, Feature). To add someone else, just put their UID in quotes
 // with a comma between each one, like the two already here. This list
-// has to match ADMIN_UIDS in firestore.rules exactly and in the same
-// order does not matter, but every UID here needs to also be there, or
-// their clicks will show up in the UI but get rejected by the server.
+// has to match ADMIN_UIDS in firestore.rules exactly, the order does not
+// matter, but every UID here needs to also be there, or their clicks
+// will show up in the UI but get rejected by the server.
 const ADMIN_UIDS = ['440QtDjzU7RYumA18x6h7BagIMi2', 'RtupX72YrbYPK7ai4ot0Lbu3oCo1'];
 
 const app = initializeApp(firebaseConfig);
@@ -284,6 +284,44 @@ function escapeAttr(str) {
 }
 function platformLabel(key) {
   return PLATFORM_LABELS[key] || key;
+}
+
+// A small, deliberately simple markdown renderer for about.md content.
+// It is not a full spec compliant parser, but it covers what a normal
+// about.md actually uses: headers, bold, italic, inline code, code
+// blocks, links, plain lists, and paragraphs. Everything is escaped
+// first, then markdown syntax is turned into real tags, so this is safe
+// to use on text pulled from someone else's repository.
+function markdownToHtml(md) {
+  let html = escapeHtml(md || '');
+
+  html = html.replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${code.trim()}</code></pre>`);
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  html = html.replace(/^#### (.*)$/gm, '<h5>$1</h5>');
+  html = html.replace(/^### (.*)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^## (.*)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^# (.*)$/gm, '<h2>$1</h2>');
+
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  html = html.replace(/(^|\n)[-*] (.*)/g, '$1<li>$2</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
+
+  html = html
+    .split(/\n{2,}/)
+    .map((block) => {
+      const trimmed = block.trim();
+      if (!trimmed) return '';
+      if (/^<(h2|h3|h4|h5|ul|pre)/.test(trimmed)) return trimmed;
+      return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`;
+    })
+    .join('\n');
+
+  return html;
 }
 
 // Public mods list.
@@ -527,8 +565,14 @@ developerProfileContent.addEventListener('click', handleModRowClick);
 
 // A full mod detail page, this is what #/mod/{id} renders. {id} is the
 // modId from mod.json when there is one, which Geode requires, so this
-// should cover every real submission.
+// should cover every real submission. The description panel prefers
+// about.md content over the plain mod.json description when we managed
+// to fetch one at submission time, see aboutMarkdown below.
 function renderModDetail(mod) {
+  const descriptionHtml = mod.aboutMarkdown
+    ? markdownToHtml(mod.aboutMarkdown)
+    : `<p>${escapeHtml(mod.description || 'No description provided.')}</p>`;
+
   modDetailContent.innerHTML = `
     <div class="mod-detail-header">
       <div class="mod-detail-icon">${escapeHtml((mod.name || '?').trim().charAt(0).toUpperCase())}</div>
@@ -539,7 +583,7 @@ function renderModDetail(mod) {
     </div>
     <div class="mod-detail-body">
       <div class="panel mod-detail-main">
-        <p>${escapeHtml(mod.description || 'No description provided.')}</p>
+        <div class="mod-detail-description">${descriptionHtml}</div>
         ${(mod.tags || []).length ? `<div class="mod-badges">${mod.tags.map((t) => `<button type="button" class="mod-badge" data-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`).join('')}</div>` : ''}
       </div>
       <div class="mod-detail-side panel">
@@ -760,6 +804,21 @@ async function scanAndSubmitMod(repoUrl) {
   const tags = Array.isArray(modJson.tags) ? modJson.tags : [];
   const platforms = modJson.gd && typeof modJson.gd === 'object' ? Object.keys(modJson.gd) : [];
 
+  // about.md is optional. If the repo has one at its root, its content
+  // becomes the mod's real description page instead of the one line
+  // summary from mod.json. If it is missing, this just quietly falls
+  // back to that summary, no error either way.
+  let aboutMarkdown = '';
+  try {
+    const aboutRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/about.md`);
+    if (aboutRes.ok) {
+      const aboutJson = await aboutRes.json();
+      aboutMarkdown = base64ToUtf8(aboutJson.content);
+    }
+  } catch (err) {
+    console.error('about.md fetch failed, falling back to mod.json description:', err);
+  }
+
   // Latest release, so we can find the actual .geode file to link to.
   const releaseRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
   if (!releaseRes.ok) {
@@ -775,6 +834,7 @@ async function scanAndSubmitMod(repoUrl) {
     modId: modJson.id || '',
     name: modJson.name || repo,
     description: modJson.description || '',
+    aboutMarkdown,
     version: modJson.version || release.tag_name || '',
     developer,
     tags,

@@ -348,7 +348,7 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 
 .back-btn { margin-bottom: 1rem; }
 
-.mono-text { font-family: var(--mono); }
+.mono-text { font-family: var(--mono); word-break: break-word; }
 
 /* Developer profile page */
 .profile-header {
@@ -356,9 +356,10 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 .profile-header-avatar { width: 64px; height: 64px; border-radius: 50%; }
-.profile-header-info { flex: 1; }
+.profile-header-info { flex: 1; min-width: 160px; }
 .profile-header-info h2 { margin: 0 0 0.2rem; font-family: var(--mono); }
 
 /* Shared "Top mods" style list, used on the developer profile page */
@@ -422,6 +423,7 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 .mod-detail-icon {
   width: 64px;
@@ -448,6 +450,27 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 700px) {
   .mod-detail-body { grid-template-columns: 1fr; }
 }
+.mod-detail-description { line-height: 1.6; }
+.mod-detail-description h2,
+.mod-detail-description h3,
+.mod-detail-description h4,
+.mod-detail-description h5 { font-family: var(--mono); margin: 1.1rem 0 0.5rem; }
+.mod-detail-description p { margin: 0 0 0.9rem; color: var(--text); }
+.mod-detail-description ul { margin: 0 0 0.9rem; padding-left: 1.3rem; }
+.mod-detail-description li { margin-bottom: 0.3rem; }
+.mod-detail-description pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem;
+  overflow-x: auto;
+  margin: 0 0 0.9rem;
+}
+.mod-detail-description a { color: var(--accent); }
+
+/* This is the part that was glitching, label and value now stack
+   instead of sitting side by side, so a long value like a full mod ID
+   or a long platform list never runs into the label next to it. */
 .mod-detail-side {
   display: flex;
   flex-direction: column;
@@ -455,12 +478,20 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 }
 .stat-row {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 0.15rem;
   font-size: 0.85rem;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.1rem;
   border-bottom: 1px solid var(--border);
 }
 .stat-row:last-of-type { border-bottom: none; }
+.stat-row > .muted {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.stat-row > span:last-child { word-break: break-word; }
 
 .developers-grid {
   display: grid;
