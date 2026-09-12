@@ -4,6 +4,7 @@
 // and configuration. These are not secret, it is fine for them to be
 // visible in frontend code.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js';
+import { getAnalytics } from 'https://www.gstatic.com/firebasejs/12.17.0/firebase-analytics.js';
 import {
   getAuth,
   GithubAuthProvider,
@@ -36,6 +37,10 @@ const firebaseConfig = {
   storageBucket: 'vibemodded-index.firebasestorage.app',
   messagingSenderId: '182624398225',
   appId: '1:182624398225:web:4e24a4255938f224408830',
+  // Firebase console, gear icon, Project settings, Your apps, the web
+  // app, scroll down to the measurementId field. It starts with "G-".
+  // Analytics stays off until this is a real value.
+  measurementId: "G-6TFGRT0SJ6"
 };
 
 // Anyone whose UID is in this list gets the Admin tab (Approve, Reject,
@@ -47,6 +52,11 @@ const firebaseConfig = {
 const ADMIN_UIDS = ['440QtDjzU7RYumA18x6h7BagIMi2', 'RtupX72YrbYPK7ai4ot0Lbu3oCo1'];
 
 const app = initializeApp(firebaseConfig);
+// Only turns on once a real measurementId is in place above, so the site
+// does not throw a console error in the meantime.
+if (firebaseConfig.measurementId && firebaseConfig.measurementId !== 'REPLACE_ME') {
+  getAnalytics(app);
+}
 const auth = getAuth(app);
 const db = getFirestore(app);
 const githubProvider = new GithubAuthProvider();
