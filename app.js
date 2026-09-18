@@ -1,8 +1,3 @@
-// Firebase setup.
-// Get these six values from the Firebase console: the gear icon, then
-// Project settings, then Your apps, then the web app, then SDK setup
-// and configuration. These are not secret, it is fine for them to be
-// visible in frontend code.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/12.17.0/firebase-analytics.js';
 import {
@@ -37,23 +32,12 @@ const firebaseConfig = {
   storageBucket: 'vibemodded-index.firebasestorage.app',
   messagingSenderId: '182624398225',
   appId: '1:182624398225:web:4e24a4255938f224408830',
-  // Firebase console, gear icon, Project settings, Your apps, the web
-  // app, scroll down to the measurementId field. It starts with "G-".
-  // Analytics stays off until this is a real value.
-  measurementId: "G-6TFGRT0SJ6"
+  measurementId: 'G-6TFGRT0SJ6',
 };
 
-// Anyone whose UID is in this list gets the Admin tab (Approve, Reject,
-// Delete, Feature). To add someone else, just put their UID in quotes
-// with a comma between each one, like the two already here. This list
-// has to match ADMIN_UIDS in firestore.rules exactly, the order does not
-// matter, but every UID here needs to also be there, or their clicks
-// will show up in the UI but get rejected by the server.
 const ADMIN_UIDS = ['440QtDjzU7RYumA18x6h7BagIMi2', 'RtupX72YrbYPK7ai4ot0Lbu3oCo1'];
 
 const app = initializeApp(firebaseConfig);
-// Only turns on once a real measurementId is in place above, so the site
-// does not throw a console error in the meantime.
 if (firebaseConfig.measurementId && firebaseConfig.measurementId !== 'REPLACE_ME') {
   getAnalytics(app);
 }
@@ -65,7 +49,6 @@ function isAdmin(user) {
   return !!user && ADMIN_UIDS.includes(user.uid);
 }
 
-// DOM references.
 const loginBtn = document.getElementById('login-btn');
 const navMods = document.getElementById('nav-mods');
 const navDevelopers = document.getElementById('nav-developers');
@@ -128,12 +111,8 @@ const PLATFORM_LABELS = {
   ios: 'iOS',
 };
 
-// State.
-let allMods = []; // every approved mod, fetched once and filtered or sorted in memory
+let allMods = [];
 
-// Turns any string into a plain lowercase, dash separated slug. Used as a
-// fallback link for a mod when it has no modId from mod.json, which
-// should be rare since Geode requires that field, but better safe.
 function slugify(s) {
   return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
@@ -141,10 +120,6 @@ function modRouteKey(mod) {
   return mod.modId || `${slugify(mod.developer || mod.authorName)}.${slugify(mod.name)}`;
 }
 
-// Simple hash based routing, so links like #/developer/ReYeCode,
-// #/tag/Utility, or #/mod/geode.node-ids work directly, are shareable,
-// and do not need a second HTML file or any server side rewrite rules,
-// since the part after the # never gets sent to GitHub Pages at all.
 function applyHashRoute() {
   const hash = window.location.hash;
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -173,7 +148,6 @@ window.addEventListener('hashchange', () => {
   renderModsList();
 });
 
-// View switching.
 function showView(view) {
   viewMods.classList.toggle('hidden', view !== 'mods');
   viewDevelopers.classList.toggle('hidden', view !== 'developers');
@@ -205,30 +179,22 @@ navAdmin.addEventListener('click', () => {
 });
 navSettings.addEventListener('click', () => showView('settings'));
 
-// The filter panel is only collapsed behind this button on small screens,
-// see the media query in style.css. On a wide screen the button stays
-// hidden and the panel is always visible.
 filtersToggleBtn.addEventListener('click', () => {
   filtersPanel.classList.toggle('open');
 });
 
-// Only English actually works right now, so this just remembers the
-// choice for later. The other options are disabled in the markup.
 const savedLanguage = window.localStorage.getItem('vm_language') || 'en';
 languageSelect.value = savedLanguage;
 languageSelect.addEventListener('change', () => {
   window.localStorage.setItem('vm_language', languageSelect.value);
 });
 
-// Auth.
 loginBtn.addEventListener('click', async () => {
   authError.classList.add('hidden');
   try {
     const result = await signInWithPopup(auth, githubProvider);
     const info = getAdditionalUserInfo(result);
     const githubUsername = info?.username || '';
-    // Saved so we can check repo ownership later, even in a session
-    // where the person did not just click through the login popup.
     await setDoc(
       doc(db, 'users', result.user.uid),
       {
@@ -266,7 +232,7 @@ onAuthStateChanged(auth, (user) => {
     approvedList.innerHTML = '';
     rejectedList.innerHTML = '';
   }
-  renderModsList(); // "only my mods" depends on being logged in or not
+  renderModsList();
 });
 
 displayNameForm.addEventListener('submit', async (e) => {
@@ -283,7 +249,6 @@ displayNameForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Helpers.
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str ?? '';
@@ -296,12 +261,6 @@ function platformLabel(key) {
   return PLATFORM_LABELS[key] || key;
 }
 
-// A small, deliberately simple markdown renderer for about.md content.
-// It is not a full spec compliant parser, but it covers what a normal
-// about.md actually uses: headers, bold, italic, inline code, code
-// blocks, links, plain lists, and paragraphs. Everything is escaped
-// first, then markdown syntax is turned into real tags, so this is safe
-// to use on text pulled from someone else's repository.
 function markdownToHtml(md) {
   let html = escapeHtml(md || '');
 
@@ -334,15 +293,9 @@ function markdownToHtml(md) {
   return html;
 }
 
-// Public mods list.
 async function loadMods() {
   modsList.innerHTML = '<p class="muted">Loading mods...</p>';
   try {
-    // Just a plain equality filter on purpose, no orderBy here. Firestore
-    // keeps automatic indexes for single field filters like this one, so
-    // this works with zero setup. Sorting happens client side instead,
-    // in renderModsList below, which we needed to do anyway to support
-    // the Most downloaded and Name sort options.
     const modsQuery = query(collection(db, 'mods'), where('status', '==', 'approved'));
     const snapshot = await getDocs(modsQuery);
     allMods = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -355,9 +308,6 @@ async function loadMods() {
   }
 }
 
-// Builds the Tags and Platform checkbox lists from whatever tags and
-// platforms actually show up across the current mods, instead of a
-// fixed list that could go stale.
 function buildDynamicFilters() {
   const tags = new Set();
   const platforms = new Set();
@@ -416,7 +366,7 @@ function renderModsList() {
   mods = mods.slice().sort((a, b) => {
     if (sortBy === 'newest') return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
     if (sortBy === 'name') return a.name.localeCompare(b.name);
-    return (b.downloads || 0) - (a.downloads || 0); // downloads is the default
+    return (b.downloads || 0) - (a.downloads || 0);
   });
 
   modCount.textContent = mods.length ? `${mods.length} indexed` : '';
@@ -460,11 +410,6 @@ function renderModsList() {
     .join('');
 }
 
-// Clicking a tag, a developer name, or a mod name updates the URL hash,
-// which is what actually applies the filter or opens the page, see
-// applyHashRoute above. This makes every one of these a real shareable
-// link, not just in memory state. Shared so the developer profile page's
-// "Top mods" list can reuse the exact same behavior.
 function handleModRowClick(e) {
   const modBtn = e.target.closest('[data-mod-route]');
   if (modBtn) {
@@ -505,7 +450,6 @@ clearFilterBtn.addEventListener('click', () => {
   renderModsList();
 });
 
-// Developers view.
 function renderDevelopers() {
   const counts = new Map();
   allMods.forEach((m) => {
@@ -534,9 +478,6 @@ function renderDevelopers() {
   });
 }
 
-// A single clickable row used in the "Top mods" list on a developer's
-// profile page, styled differently from the grid cards on the main
-// Mods page since it reads better as a compact list here.
 function modRowHtml(mod) {
   return `
     <button type="button" class="mod-row" data-mod-route="${escapeAttr(modRouteKey(mod))}">
@@ -549,9 +490,6 @@ function modRowHtml(mod) {
     </button>`;
 }
 
-// A whole developer profile page: avatar, mod count, a link to their
-// GitHub, and every approved mod they have. This is what #/developer/x
-// actually renders now, it used to just filter the main grid.
 function renderDeveloperProfile(name) {
   const mods = allMods.filter((m) => (m.developer || m.authorName) === name);
   const avatar = mods[0]?.authorAvatar || '';
@@ -573,11 +511,6 @@ function renderDeveloperProfile(name) {
 }
 developerProfileContent.addEventListener('click', handleModRowClick);
 
-// A full mod detail page, this is what #/mod/{id} renders. {id} is the
-// modId from mod.json when there is one, which Geode requires, so this
-// should cover every real submission. The description panel prefers
-// about.md content over the plain mod.json description when we managed
-// to fetch one at submission time, see aboutMarkdown below.
 function renderModDetail(mod) {
   const descriptionHtml = mod.aboutMarkdown
     ? markdownToHtml(mod.aboutMarkdown)
@@ -615,7 +548,6 @@ function renderModDetail(mod) {
 }
 modDetailContent.addEventListener('click', handleModRowClick);
 
-// Your mods, shown on the profile page.
 async function loadMyMods() {
   const user = auth.currentUser;
   if (!user) return;
@@ -649,7 +581,6 @@ function renderMyMods(container, mods, emptyText) {
     .join('');
 }
 
-// Admin view.
 async function loadAdmin() {
   const user = auth.currentUser;
   if (!isAdmin(user)) return;
@@ -751,7 +682,6 @@ async function deleteMod(modId) {
   }
 }
 
-// GitHub mod.json scanner.
 function parseRepoUrl(url) {
   try {
     const u = new URL(url.trim());
@@ -764,9 +694,6 @@ function parseRepoUrl(url) {
   }
 }
 
-// GitHub base64 encodes file contents with line breaks mixed in, so this
-// strips those and decodes it properly as UTF 8, otherwise descriptions
-// with accented letters or emoji come out broken.
 function base64ToUtf8(b64) {
   const clean = b64.replace(/\n/g, '');
   const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
@@ -779,9 +706,6 @@ async function scanAndSubmitMod(repoUrl) {
   const { owner, repo } = parsed;
   const user = auth.currentUser;
 
-  // Ownership check. The repo's real owner has to match the GitHub
-  // account currently signed in, so nobody can index someone else's mod
-  // under their own name.
   const userDocSnap = await getDoc(doc(db, 'users', user.uid));
   const githubUsername = userDocSnap.exists() ? userDocSnap.data().githubUsername : null;
 
@@ -796,10 +720,6 @@ async function scanAndSubmitMod(repoUrl) {
     );
   }
 
-  // mod.json from the repo root. api.github.com allows this kind of
-  // request from a browser, the release download links used below do
-  // not, which is why we read the manifest here instead of opening the
-  // .geode file itself.
   const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/mod.json`);
   if (!metaRes.ok) {
     throw new Error(`Could not find mod.json at the root of ${owner}/${repo}`);
@@ -814,10 +734,6 @@ async function scanAndSubmitMod(repoUrl) {
   const tags = Array.isArray(modJson.tags) ? modJson.tags : [];
   const platforms = modJson.gd && typeof modJson.gd === 'object' ? Object.keys(modJson.gd) : [];
 
-  // about.md is optional. If the repo has one at its root, its content
-  // becomes the mod's real description page instead of the one line
-  // summary from mod.json. If it is missing, this just quietly falls
-  // back to that summary, no error either way.
   let aboutMarkdown = '';
   try {
     const aboutRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/about.md`);
@@ -826,10 +742,9 @@ async function scanAndSubmitMod(repoUrl) {
       aboutMarkdown = base64ToUtf8(aboutJson.content);
     }
   } catch (err) {
-    console.error('about.md fetch failed, falling back to mod.json description:', err);
+    console.error(err);
   }
 
-  // Latest release, so we can find the actual .geode file to link to.
   const releaseRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
   if (!releaseRes.ok) {
     throw new Error(`${owner}/${repo} does not have any releases yet. Publish one with a .geode file attached first.`);
