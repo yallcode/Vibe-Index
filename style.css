@@ -350,7 +350,6 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 
 .mono-text { font-family: var(--mono); word-break: break-word; }
 
-/* Developer profile page */
 .profile-header {
   display: flex;
   align-items: center;
@@ -362,7 +361,6 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 .profile-header-info { flex: 1; min-width: 160px; }
 .profile-header-info h2 { margin: 0 0 0.2rem; font-family: var(--mono); }
 
-/* Shared "Top mods" style list, used on the developer profile page */
 .mod-row-list {
   display: flex;
   flex-direction: column;
@@ -402,7 +400,6 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 .mod-row-desc { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mod-row-downloads { font-size: 0.75rem; color: var(--muted); flex-shrink: 0; }
 
-/* Mod name link inside the grid cards */
 .mod-name-link {
   background: none;
   border: none;
@@ -417,7 +414,6 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 }
 .mod-name-link:hover { color: var(--accent); }
 
-/* Mod detail page */
 .mod-detail-header {
   display: flex;
   align-items: center;
@@ -468,9 +464,6 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 }
 .mod-detail-description a { color: var(--accent); }
 
-/* This is the part that was glitching, label and value now stack
-   instead of sitting side by side, so a long value like a full mod ID
-   or a long platform list never runs into the label next to it. */
 .mod-detail-side {
   display: flex;
   flex-direction: column;
@@ -580,7 +573,6 @@ button.mod-badge:hover { border-color: var(--accent); color: var(--accent); }
 .footer-links a:hover { color: var(--accent); text-decoration: underline; }
 .footer-note { margin: 0; }
 
-/* Mobile layout fixes */
 @media (max-width: 800px) {
   .mods-layout {
     display: flex;
